@@ -567,7 +567,8 @@ en:
   label_crm_show_in_app_menu: Show in app menu
   label_crm_money_settings: Money
   label_crm_disable_taxes: Disable taxes
-  label_crm_default_tax: Default tax value
+  label_crm_default_tax_gst: Default GST tax value
+  label_crm_default_tax_pst: Default PST tax value
   label_crm_tax_type: Tax type
   label_crm_tax_type_inclusive: Tax inclusive
   label_crm_tax_type_exclusive: Tax exclusive

@@ -566,7 +566,8 @@ fr:
   label_crm_show_in_app_menu: Afficher dans le menu des applications
   label_crm_money_settings: Monnaie
   label_crm_disable_taxes: Désactiver les taxes
-  label_crm_default_tax: Valeur de taxe par défaut
+  label_crm_default_tax_gst: Valeur de taxe TPS par défaut
+  label_crm_default_tax_pst: Valeur de taxe TVQ par défaut
   label_crm_tax_type: Type de taxe
   label_crm_tax_type_inclusive: Taxe incluse
   label_crm_tax_type_exclusive: Hors taxe

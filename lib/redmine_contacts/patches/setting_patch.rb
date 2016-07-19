@@ -44,7 +44,7 @@ module RedmineContacts
         #   self[:disable_taxes] = value
         # end
 
-        %w(disable_taxes default_tax tax_type default_currency money_thousands_delimiter money_decimal_separator).each do |name|
+        %w(disable_taxes default_tax_gst default_tax_pst tax_type default_currency money_thousands_delimiter money_decimal_separator).each do |name|
           src = <<-END_SRC
           Setting.available_settings["#{name}"] = ""
 

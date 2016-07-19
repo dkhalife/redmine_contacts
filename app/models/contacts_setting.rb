@@ -113,10 +113,14 @@ class ContactsSetting < ActiveRecord::Base
     currencies.compact.uniq
   end
 
-  def self.default_tax
-    Setting.plugin_redmine_contacts["default_tax"].to_f
+  def self.default_tax_gst
+    Setting.plugin_redmine_contacts["default_tax_gst"].to_f
   end
 
+  def self.default_tax_pst
+    Setting.plugin_redmine_contacts["default_tax_pst"].to_f
+  end
+  
   def self.tax_type
     ((["1", "2"] & [Setting.plugin_redmine_contacts["tax_type"].to_s]).first || TAX_TYPE_EXCLUSIVE).to_i
   end
