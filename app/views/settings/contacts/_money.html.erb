@@ -5,8 +5,12 @@
 
 <span id="tax_data">
 <p>
-  <label><%= l(:label_crm_default_tax) %></label>
-  <%= text_field_tag 'settings[default_tax]', ContactsSetting.default_tax, :size => 6, :maxlength => 5 %> %
+  <label><%= l(:label_crm_default_tax_gst) %></label>
+  <%= text_field_tag 'settings[default_tax_gst]', ContactsSetting.default_tax_gst, :size => 6, :maxlength => 5 %> %
+</p>
+<p>
+  <label><%= l(:label_crm_default_tax_pst) %></label>
+  <%= text_field_tag 'settings[default_tax_pst]', ContactsSetting.default_tax_pst, :size => 6, :maxlength => 5 %> %
 </p>
 
 <p>
