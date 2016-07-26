@@ -57,6 +57,11 @@
 	<tr> <th class = "birthday"><%= l(:field_birthday) %>:</th><td class="birthday bday" title=<%= "#{format_date(@contact.birthday)}" %>><%= "#{@contact.birthday.day} #{t('date.month_names')[@contact.birthday.month]}"%></td> </tr>
 	<tr> <th class = "age"><%= l(:field_age) %>:</th><td class="ega"><%= @contact.age %></td> </tr>
 	<% end %>
+	<% @contact.custom_field_values.compact.each do |custom_value| %>
+		<% if !custom_value.value.blank? %>
+		<tr> <th class = "custom_field"><%= custom_value.custom_field.name%>:</th><td> <%= simple_format_without_paragraph(h(show_value(custom_value))) %></td> </tr>
+		<% end %>
+	<% end %>
 
   <% if @contact.assigned_to %>
   <tr><th class="author"><%=l(:label_crm_assigned_to)%>:</th><td class="author"><%= avatar(@contact.assigned_to, :size => "14") %><%= link_to_user(@contact.assigned_to)  %></td></tr>

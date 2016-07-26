@@ -78,6 +78,9 @@ class ContactDrop < Liquid::Drop
   def address
     AddressDrop.new(@contact.address) if @contact.address
   end
+  def custom_field_values
+    @contact.custom_field_values
+  end
 
   private
 

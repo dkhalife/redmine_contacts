@@ -88,17 +88,22 @@ class Contact < ActiveRecord::Base
   if ActiveRecord::VERSION::MAJOR >= 4
     has_one :avatar, lambda { where("#{Attachment.table_name}.description = 'avatar'") }, :class_name => "Attachment", :as  => :container, :dependent => :destroy
     has_one :address, lambda { where(:address_type => "business") }, :dependent => :destroy, :as => :addressable, :class_name => "Address"
+    has_many :deals, lambda { order("#{Deal.table_name}.status_id") }
+    has_and_belongs_to_many :related_deals, lambda { order("#{Deal.table_name}.status_id").uniq }, :class_name => 'Deal'
     has_and_belongs_to_many :projects, lambda { uniq }
     has_and_belongs_to_many :issues, lambda { order("#{Issue.table_name}.due_date").uniq }
   else
     has_one :avatar, :conditions => "#{Attachment.table_name}.description = 'avatar'", :class_name => "Attachment", :as  => :container, :dependent => :destroy
     has_one :address, :conditions => {:address_type => "business"}, :dependent => :destroy, :as => :addressable, :class_name => "Address"
+    has_many :deals, :order => "#{Deal.table_name}.status_id"
+    has_and_belongs_to_many :related_deals, :order => "#{Deal.table_name}.status_id", :class_name => 'Deal', :uniq => true
     has_and_belongs_to_many :projects, :uniq => true
     has_and_belongs_to_many :issues, :order => "#{Issue.table_name}.due_date", :uniq => true
   end
 
   attr_accessor :phones
   attr_accessor :emails
+  acts_as_customizable
   acts_as_viewable
   rcrm_acts_as_taggable
   acts_as_watchable
@@ -199,6 +204,8 @@ class Contact < ActiveRecord::Base
     'email',
     'tag_list',
     'visibility',
+    'custom_field_values',
+    'custom_fields',
     'watcher_user_ids',
     'address_attributes'
 
@@ -236,6 +243,13 @@ class Contact < ActiveRecord::Base
 
   def self.deletable_condition(user, options={})
     self.visible_condition(user, options) + " AND (#{Project.allowed_to_condition(user, :delete_contacts)})"
+  end
+  def all_deals
+    @all_deals ||= (self.deals + self.related_deals ).uniq.sort!{|x, y| x.status_id <=> y.status_id }
+  end
+
+  def all_visible_deals(usr=User.current)
+    @all_deals ||= (self.deals.visible(usr) + self.related_deals.visible(usr)).uniq.sort!{|x, y| x.status_id <=> y.status_id }
   end
 
   def self.available_tags(options = {})

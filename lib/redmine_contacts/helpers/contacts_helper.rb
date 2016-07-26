@@ -303,6 +303,28 @@ module RedmineContacts
       call_hook(:helper_notes_note_type_tag, context)
       context[:type_tag].html_safe
     end
+    def deal_tag(deal, options={})
+      return deal.name unless deal.visible?
+      deal_name = options[:no_contact] ? deal.name : deal.full_name
+      s = ""
+      s << avatar_to(deal, :size => options.delete(:size) || 16) unless options[:plain]
+      s << " " + link_to(deal_name, deal_path(deal))
+      s << " (#{deal.price_to_s}) " unless deal.price.blank? || options[:no_price]
+      s << (options[:plain] ? deal.status.name : deal_status_tag(deal.status)) if deal.status
+      s.html_safe
+    end
+
+    def deal_status_tag(deal_status)
+      status_tag = content_tag(:span, deal_status.name)
+      content_tag(:span, status_tag, :class => "tag-label-color", :style => "background-color:#{deal_status.color_name};color:white;")
+    end
+
+    def deals_for_select(project, options = {})
+      scope = Deal.visible
+      scope = scope.limit(options[:limit] || 500)
+      scope = scope.by_project(project) if project
+      scope.order("#{Deal.table_name}.name").collect {|m| [m.name + (m.info.blank? ? '' : " - #{m.info}"), m.id.to_s]}
+    end
   end
 end
 

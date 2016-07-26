@@ -110,6 +110,99 @@ class ContactsControllerTest < ActionController::TestCase
     assert_select 'h3', :html => /Tags/
     assert_select 'h3', :html => /Recently viewed/
   end
+  test "should get index with filters and sorting" do
+    field = ContactCustomField.create!(:name => 'Test custom field', :is_filter => true, :field_format => 'string')
+    contact = Contact.find(1)
+    contact.custom_field_values = {field.id => "This is custom значение"}
+    contact.save
+
+    @request.session[:user_id] = 1
+    Setting.default_language = 'en'
+
+    get :index, :sort => "assigned_to,cf_1,last_name,first_name",
+                :v => {"first_name"=>["Ivan"]},
+                :f => ["first_name", ""],
+                :op => {"first_name"=>"~"}
+    assert_response :success
+    assert_template :index
+    assert_not_nil assigns(:contacts)
+
+    assert_select 'div#content div#contact_list table.contacts td.name h1', 'Ivan Ivanov'
+  end
+
+  def test_get_index_with_all_fields
+    @request.session[:user_id] = 1
+    get :index, crm_query_params.merge({:f => ContactQuery.available_columns.map(&:name), :contacts_list_style => "list"})
+    assert_response :success
+    assert_template :index
+
+    assert_select 'tr#contact-1 td.id a[href=?]', '/contacts/1'
+  end
+
+  def test_index_with_short_filters
+    @request.session[:user_id] = 1
+    to_test = {
+      'tags' => {
+        'main|test' => { :op => '=', :values => ['main', 'test'] },
+        '=main' => { :op => '=', :values => ['main'] },
+        '!test' => { :op => '!', :values => ['test'] }},
+      'country' => {
+        '*' => { :op => '*', :values => [''] },
+        '!*' => { :op => '!*', :values => [''] },
+        'US|RU' => { :op => '=', :values => ['US', 'RU'] }},
+      'first_name' => {
+        'Marat' => { :op => '=', :values => ['Marat'] },
+        '~Mara' => { :op => '~', :values => ['Mara'] },
+        '!~Mara' => { :op => '!~', :values => ['Mara'] }},
+      'created_on' => {
+        '>=2011-10-12' => { :op => '>=', :values => ['2011-10-12'] },
+        '<t-2' => { :op => '<t-', :values => ['2'] },
+        '>t-2' => { :op => '>t-', :values => ['2'] },
+        't-2' => { :op => 't-', :values => ['2'] }},
+      'last_note' => {
+        '>=2011-10-12' => { :op => '>=', :values => ['2011-10-12'] },
+        '<t-2' => { :op => '<t-', :values => ['2'] },
+        '>t-2' => { :op => '>t-', :values => ['2'] },
+        't-2' => { :op => 't-', :values => ['2'] }},
+      'has_deals' => {
+        'c' => { :op => '=', :values => ['c'] },
+        '!c' => { :op => '!', :values => ['c'] }},
+      'has_open_issues' => {
+        '=4' => { :op => '=', :values => ['4'] },
+        '!*' => { :op => '!*', :values => [''] },
+        '*' => { :op => '*', :values => [''] }}
+    }
+
+    default_filter = { 'status_id' => {:operator => 'o', :values => [''] }}
+
+    to_test.each do |field, expression_and_expected|
+      expression_and_expected.each do |filter_expression, expected|
+        get :index, :set_filter => 1, field => filter_expression
+
+        assert_response :success
+        assert_template 'index'
+        assert_not_nil assigns(:contacts)
+
+        query = assigns(:query)
+        assert_not_nil query
+        assert query.has_filter?(field)
+        assert_equal({field => {:operator => expected[:op], :values => expected[:values]}}, query.filters)
+      end
+    end
+  end
+
+  def test_index_sort_by_custom_field
+    @request.session[:user_id] = 1
+    cf = ContactCustomField.create!(:name => 'Contact test cf', :is_for_all => true, :field_format => 'string')
+    CustomValue.create!(:custom_field => cf, :customized => Contact.find(1), :value => 'test_1')
+    CustomValue.create!(:custom_field => cf, :customized => Contact.find(2), :value => 'test_2')
+    CustomValue.create!(:custom_field => cf, :customized => Contact.find(3), :value => 'test_3')
+
+    get :index, :set_filter => 1, :sort => "cf_#{cf.id},id"
+    assert_response :success
+
+    assert_equal [1, 2, 3], assigns(:contacts).select {|contact| contact.custom_field_value(cf).present?}.map(&:id).sort
+  end
 
   test "should not absolute links" do
     @request.session[:user_id] = 1
@@ -135,6 +228,38 @@ class ContactsControllerTest < ActionController::TestCase
     assert_response :success
     assert_template :index
     assert_select 'div#content div#contact_list table.contacts td.name h1 a', 'Domoway'
+  end
+  test "should get index as csv" do
+    field = ContactCustomField.create!(:name => 'Test custom field', :is_filter => true, :field_format => 'string')
+    contact = Contact.find(1)
+    contact.custom_field_values = {field.id => "This is custom значение"}
+    contact.save
+
+    @request.session[:user_id] = 1
+    get :index, :format => 'csv'
+    assert_response :success
+    assert_not_nil assigns(:contacts)
+    assert_equal "text/csv; header=present", @response.content_type
+    assert_match /Domoway/, @response.body
+  end
+
+  test "should get index as VCF" do
+    @request.session[:user_id] = 1
+    get :index, :format => 'vcf'
+    assert_response :success
+    assert_not_nil assigns(:contacts)
+    assert_equal 'text/x-vcard', @response.content_type
+    assert @response.body.starts_with?("BEGIN:VCARD")
+    assert_match /^N:;Domoway/, @response.body
+  end
+
+  test "should get contacts_notes as csv" do
+    @request.session[:user_id] = 1
+    get :contacts_notes, :format => 'csv'
+    assert_response :success
+    assert_not_nil assigns(:notes)
+    assert_equal "text/csv; header=present", @response.content_type
+    assert @response.body.starts_with?("#,")
   end
 
   def test_get_show
@@ -164,6 +289,36 @@ class ContactsControllerTest < ActionController::TestCase
     assert_response :success
     assert_template :show
     assert_select '.note a', '(read more)'
+  end
+
+  def test_get_show_tab_deals
+    @request.session[:user_id] = 2
+    Setting.default_language = 'en'
+
+    get :show, :id => 3, :project_id => 1, :tab => "deals"
+    assert_response :success
+    assert_template :show
+    assert_not_nil assigns(:contact)
+    assert_not_nil assigns(:project)
+    assert_select 'h1', :html => /Domoway/
+    assert_select 'div#deals a', "Delevelop redmine plugin"
+    assert_select 'div#deals a', "Second deal with contacts"
+  end
+
+  test "should get show without deals" do
+    # log_user('admin', 'admin')
+    @request.session[:user_id] = 4
+    Setting.default_language = 'en'
+
+    get :show, :id => 3, :project_id => 1, :tab => "deals"
+    assert_response :success
+    assert_template :show
+    assert_not_nil assigns(:contact)
+    assert_not_nil assigns(:project)
+
+    assert_select 'div#deals a', {:count => 0, :text => /Delevelop redmine plugin/}
+    assert_select 'div#deals a', {:count => 0, :text => /Second deal with contacts/}
+
   end
   test "should get new" do
     @request.session[:user_id] = 2
@@ -202,6 +357,28 @@ class ContactsControllerTest < ActionController::TestCase
     assert_equal "CFO", contact.job_title
     assert_equal ["new", "test"], contact.tag_list.sort
     assert_equal 3, contact.assigned_to_id
+  end
+  test "should post create with custom fields" do
+    field = ContactCustomField.create!(:name => 'Test', :is_filter => true, :field_format => 'string')
+    @request.session[:user_id] = 1
+    assert_difference 'Contact.count' do
+      post :create, :project_id => 1,
+                    :contact => {
+                                :company => "OOO \"GKR\"",
+                                :is_company => 0,
+                                :job_title => "CFO",
+                                :assigned_to_id => 3,
+                                :tag_list => "test,new",
+                                :last_name => "New",
+                                :middle_name => "Ivanovich",
+                                :first_name => "Created",
+                                :custom_field_values => {"#{field.id}" => "contact one"} }
+
+    end
+    assert_redirected_to :controller => 'contacts', :action => 'show', :id => Contact.last.id, :project_id => Contact.last.project
+
+    contact = Contact.where(:first_name => "Created", :last_name => "New", :middle_name => "Ivanovich").first
+    assert_equal "contact one", contact.custom_field_values.last.value
   end
 
   test "should not post create by deny user" do
@@ -265,6 +442,95 @@ class ContactsControllerTest < ActionController::TestCase
     end
 
   end
+
+  def test_bulk_edit_mails
+    @request.session[:user_id] = 1
+    post :edit_mails, :ids => [1, 2]
+    assert_response :success
+    assert_template 'edit_mails'
+    assert_not_nil assigns(:contacts)
+  end
+
+  def test_bulk_edit_mails_by_deny_user
+    @request.session[:user_id] = 4
+    post :edit_mails, :ids => [1, 2]
+    assert_response 403
+  end
+
+  def test_bulk_send_mails_by_deny_user
+    @request.session[:user_id] = 4
+    post :send_mails, :ids => [1, 2], :message => "test message", :subject => "test subject"
+    assert_response 403
+  end
+
+  def test_bulk_send_mails
+    ActionMailer::Base.deliveries = []
+    @request.session[:user_id] = 1
+    post :send_mails, :ids => [2], :from => "test@mail.from", :bcc => "test@mail.bcc", :"message-content" => "Hello %%NAME%%\ntest message", :subject => "test subject"
+    mail = ActionMailer::Base.deliveries.last
+    note = Note.last
+    assert_not_nil mail
+    assert_match /Hello Marat/, mail.text_part.body.to_s
+    assert_equal "test subject", mail.subject
+    assert_equal "test@mail.from", mail.from.first
+    assert_equal "test@mail.bcc", mail.bcc.first
+    assert_equal "test subject", note.subject
+    assert_equal note.type_id, Note.note_types[:email]
+    assert_equal "Hello Marat\ntest message", note.content
+  end
+
+  test "should bulk edit contacts" do
+    @request.session[:user_id] = 1
+    post :bulk_edit, :ids => [1, 2]
+    assert_response :success
+    assert_template 'bulk_edit'
+    assert_not_nil assigns(:contacts)
+  end
+
+  test "should not bulk edit contacts by deny user" do
+    @request.session[:user_id] = 4
+    assert_raises ActiveRecord::RecordNotFound do
+      post :bulk_edit, :ids => [1, 2]
+    end
+  end
+
+  test "should put bulk update " do
+    @request.session[:user_id] = 1
+
+    put :bulk_update, :ids => [1, 2],
+                      :add_tag_list => 'bulk, edit, tags',
+                      :delete_tag_list => 'main',
+                      :add_projects_list => ['1', '2', '3'],
+                      :delete_projects_list => ['3', '4', '5'],
+                      :note => {:content => "Bulk note content"},
+                      :contact => {:company => "Bulk company", :job_title => ''}
+
+    assert_redirected_to :controller => 'contacts', :action => 'index', :project_id => nil
+    contacts = Contact.find([1, 2])
+    contacts.each do |contact|
+      assert_equal "Bulk company", contact.company
+      tag_list = contact.tag_list #Need for 4 rails
+      assert tag_list.include?('bulk')
+      assert tag_list.include?('edit')
+      assert tag_list.include?('tags')
+      assert !tag_list.include?('main')
+      assert contact.project_ids.include?(1) && contact.project_ids.include?(2)
+
+      assert_equal "Bulk note content", contact.notes.find_by_content("Bulk note content").content
+    end
+
+  end
+
+  test "should not put bulk update by deny user" do
+    @request.session[:user_id] = 4
+
+    put :bulk_update, :ids => [1, 2],
+                      :add_tag_list => 'bulk, edit, tags',
+                      :delete_tag_list => 'main',
+                      :note => {:content => "Bulk note content"},
+                      :contact => {:company => "Bulk company", :job_title => ''}
+    assert_response 403
+  end
   test "should get contacts notes" do
     # log_user('admin', 'admin')
     @request.session[:user_id] = 2
@@ -314,6 +580,25 @@ class ContactsControllerTest < ActionController::TestCase
     assert_response :success
     assert_template '_notes_list'
     assert_select 'table.note_data div.note.content.preview', /Note 2/
+  end
+  test 'should have import CSV link for user authorized to' do
+    @request.session[:user_id] = 1
+    get :index, :project_id => 1
+    assert_response :success
+    assert_select 'a#import_from_csv'
+  end
+
+  test 'should not have import CSV link for user not authorized to' do
+    @request.session[:user_id] = 4
+    get :index, :project_id => 1
+    assert_response :success
+    assert_select 'a#import_from_csv', false, 'Should not see CSV import link'
+  end
+
+  test 'should render tab partial on call to load_tab' do
+    @request.session[:user_id] = 4
+    xhr :get, :load_tab, :id => 3, :tab_name => 'notes', :partial => 'notes', :format => :js
+    assert_template 'contacts/_notes'
   end
 
   test "should create with avatar" do

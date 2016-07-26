@@ -44,6 +44,7 @@ api.array :contacts, api_meta(:total_count => @contacts_count, :offset => @offse
 
 
 	  api.tag_list contact.tag_list
+	  render_api_custom_values contact.custom_field_values, api
 
 	  api.created_on contact.created_on
 	  api.updated_on contact.updated_on

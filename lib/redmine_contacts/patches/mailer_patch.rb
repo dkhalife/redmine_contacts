@@ -55,6 +55,36 @@ module RedmineContacts
                :subject => "[#{contact.project.name} - #{l(:label_contact)} ##{contact.id}] #{contact.name}"
 
         end
+        def crm_deal_add(deal)
+          redmine_headers 'Project' => deal.project.identifier,
+                          'X-Deal-Id' => deal.id
+          @author = deal.author
+          message_id deal
+          recipients = deal.recipients
+          cc = deal.watcher_recipients - recipients
+          @deal = deal
+          @deal_url = url_for(:controller => 'deals', :action => 'show', :id => deal.id)
+          mail :to => recipients,
+               :cc => cc,
+               :subject => "[#{deal.project.name} - #{l(:label_deal)} ##{deal.id}] #{deal.full_name}"
+
+        end
+
+        def crm_deal_updated(deal_process)
+          @deal = deal_process.deal
+          redmine_headers 'Project' => @deal.project.identifier,
+                          'X-Deal-Id' => @deal.id
+          @author = deal_process.author
+          recipients = deal_process.recipients
+          cc = @deal.watcher_recipients - recipients
+          @status_was = deal_process.from
+          @status = deal_process.to
+          @deal_url = url_for(:controller => 'deals', :action => 'show', :id => @deal.id)
+          mail :to => recipients,
+               :cc => cc,
+               :subject => "[#{@deal.project.name} - #{l(:label_deal)} ##{@deal.id}] #{@deal.full_name}"
+
+        end
 
         def crm_issue_connected(issue, contact)
           redmine_headers 'X-Project' => contact.project.identifier,

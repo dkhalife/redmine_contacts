@@ -69,6 +69,94 @@ class IssuesControllerTest < ActionController::TestCase
     get :show, :id => 1
     assert_response :success
     assert_select "#issue_contacts span.contact a", /Marat Aminov/
+    assert_select "td.deal a", /Ivan Ivanov: First deal with contacts/
+  end
+  def test_get_index_with_contacts_and_deals
+    @request.session[:user_id] = 1
+    get :index, :f => ["status_id", "companies",  "deal", ""],
+                :op => {:status_id => "o", :companies => "=", :deal => "="},
+                :v => {:companies => ["3"], :deal => ["2"]},
+                :c => ["subject", "contacts", "deal"],
+                :project_id => "ecookbook"
+    assert_response :success
+    assert_select "table.list.issues td.contacts span.contact a", /Marat Aminov/
+    assert_select "table.list.issues td.deal a", /Second deal with contacts/
+  end
+
+  def test_get_issues_without_contacts
+    @request.session[:user_id] = 1
+    get :index, :f => ["status_id", "contacts", ""],
+                :op => {:status_id => "*", :contacts => "!*"},
+                :c => ["subject", "contacts"],
+                :project_id => "ecookbook"
+    assert_response :success
+    assert_select "table.list.issues td.contacts", ""
+  end
+
+  def test_get_issues_only_with_contacts
+    @request.session[:user_id] = 1
+    get :index, :f => ["status_id", "contacts", ""],
+                :op => {:status_id => "*", :contacts => "*"},
+                :c => ["subject", "contacts"],
+                :project_id => "ecookbook"
+    assert_response :success
+    assert_select "table.list.issues td.contacts"
+  end
+
+  def test_get_new_with_deal
+    @request.session[:user_id] = 1
+    get :new, :project_id => 'ecookbook', :deal_id => 1
+    assert_response :success
+    assert_select "span#issue_deal", /First deal with contacts/
+    if ActiveRecord::VERSION::MAJOR >= 4
+      assert_select "#issue_deals_issue_attributes_deal_id[value='1']"
+    else
+      assert_select "#issue_deals_issue_attributes_deal_id[value=?]", 1
+    end
+  end
+
+  def test_post_create_with_deal
+    @request.session[:user_id] = 1
+    assert_difference 'DealsIssue.count' do
+      post :create,
+           :issue => {:tracker_id => 3, :subject => "test", :status_id => 2, :priority_id => 5,
+                      :deals_issue_attributes => {:deal_id => 1}},
+           :project_id => 'ecookbook'
+    end
+
+    issue = Issue.order('id ASC').last
+    assert_redirected_to :controller => 'issues', :action => 'show', :id => issue.id
+    assert_not_nil issue.deal
+  end
+
+  def test_post_create_with_invalid_deal_id
+    @request.session[:user_id] = 1
+    assert_no_difference 'Issue.count' do
+      post :create,
+           :issue => {:tracker_id => 3, :subject => "test", :status_id => 2, :priority_id => 5,
+                      :deals_issue_attributes => {:deal_id => 'abc'}},
+           :project_id => 'ecookbook'
+    end
+  end
+
+  def test_put_update_form
+    @request.session[:user_id] = 1
+    issue = Issue.find(1)
+    if ActiveRecord::VERSION::MAJOR < 4
+      xhr :put, :update_form,
+              :issue => {:tracker_id => 2,
+                         :deals_issue_attributes => {:deal_id => 2}},
+              :project_id => issue.project
+      assert_response :success
+      assert_equal 'text/javascript', response.content_type
+      assert_template 'update_form'
+
+
+      issue = assigns(:issue)
+      assert_kind_of Issue, issue
+      assert_equal 2, issue.deals_issue.deal_id
+    end
+
   end
 
 end

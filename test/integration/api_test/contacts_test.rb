@@ -126,5 +126,51 @@ class Redmine::ApiTest::ContactsTest < ActiveRecord::VERSION::MAJOR >= 4 ? Redmi
     assert_equal "API update", contact.first_name
 
   end
+  def test_update_contact_with_uploaded_file
+    set_tmp_attachments_directory
+    # upload the file
+    assert_difference 'Attachment.count' do
+      post '/uploads.xml', 'test_upload_with_upload',
+           {"CONTENT_TYPE" => 'application/octet-stream'}.merge(credentials('admin'))
+      assert_response :created
+    end
+    xml = Hash.from_xml(response.body)
+    token = xml['upload']['token']
+    attachment = Attachment.order('id DESC').first
+
+    # update the issue with the upload's token
+    put '/contacts/1.xml',
+        {:contact => {:name => 'Attachment added',
+                    :uploads => [{:token => token, :filename => 'test.png',
+                                  :description => 'avatar',
+                                  :content_type => 'image/png'}]}},
+        credentials('admin')
+    assert_response :ok
+    assert_equal '', @response.body
+
+    contact = Contact.where(:id => 1).first
+    assert_include attachment, contact.attachments
+    assert_equal attachment, contact.avatar
+  end
+
+
+  def test_should_post_with_custom_fields
+    field = ContactCustomField.create!(:name => 'Test', :field_format => 'int')
+    assert_difference('Contact.count') do
+      post '/contacts.xml', {:contact => {:project_id => 1, :first_name => 'API test',
+          :custom_fields => [{'id' => field.id.to_s, 'value' => '12' }]}}, credentials('admin')
+    end
+    contact = Contact.last
+    assert_equal '12', contact.custom_value_for(field.id).value
+  end
+
+  def test_should_put_with_custom_fields
+    field = ContactCustomField.create!(:name => 'Test', :field_format => 'text')
+    assert_no_difference('Contact.count') do
+      put '/contacts/1.xml', {:contact => {:custom_fields => [{'id' => field.id.to_s, 'value' => 'Hello' }]}}, credentials('admin')
+    end
+    contact = Contact.where(:id => 1).first
+    assert_equal 'Hello', contact.custom_value_for(field.id).value
+  end
 
 end

@@ -37,7 +37,49 @@
         get :contacts_notes
       end
     end
+    resources :contact_imports, :only => [:new, :create, :show] do
+      member do
+        get :settings
+        post :settings
+        get :mapping
+        post :mapping
+        get :run
+        post :run
+      end
+    end
+    resources :deal_imports, :only => [:new, :create, :show] do
+      member do
+        get :settings
+        post :settings
+        get :mapping
+        post :mapping
+        get :run
+        post :run
+      end
+    end
+    resources :deal_categories
 
+  end
+  resources :deals do
+    collection do
+      get :bulk_edit, :context_menu, :edit_mails, :preview_email
+      post :bulk_edit, :bulk_update, :send_mails, :update_form
+      put :update_form
+      delete :bulk_destroy
+    end
+  end
+
+  resources :projects do
+    resources :deals, :only => [:new, :create, :index]
+    resources :deal_categories, :only => [:new, :create, :index]
+  end
+
+  resources :deal_categories, :only => [:edit, :update, :destroy]
+
+  resources :deal_statuses, :except => :show do
+    collection do
+      put :assing_to_project
+    end
   end
 
   resources :projects do
@@ -68,6 +110,7 @@
   match 'auto_completes/contact_tags' => 'auto_completes#contact_tags', :via => :get, :as => 'auto_complete_contact_tags'
   match 'auto_completes/contacts' => 'auto_completes#contacts', :via => :get, :as => 'auto_complete_contacts'
   match 'auto_completes/companies' => 'auto_completes#companies', :via => :get, :as => 'auto_complete_companies'
+  match 'auto_completes/deals' => 'auto_completes#deals', :via => :get, :as => 'auto_complete_deals'
 
   match 'users/new_from_contact/:id' => 'users#new_from_contact', :via => :get
   match 'contacts_duplicates/:action' => 'contacts_duplicates', :via => [:get, :post]

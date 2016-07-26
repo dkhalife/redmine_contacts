@@ -27,8 +27,14 @@ module RedmineContacts
           has_many :deals, :dependent => :delete_all
           if ActiveRecord::VERSION::MAJOR >= 4
             has_and_belongs_to_many :contacts, lambda { order("#{Contact.table_name}.last_name, #{Contact.table_name}.first_name") }
+
+            has_many :deal_categories, lambda { order("#{DealCategory.table_name}.name") }, :dependent => :delete_all
+            has_and_belongs_to_many :deal_statuses, lambda { order("#{DealStatus.table_name}.status_type, #{DealStatus.table_name}.position").uniq }
           else
             has_and_belongs_to_many :contacts, :order => "#{Contact.table_name}.last_name, #{Contact.table_name}.first_name"
+
+            has_many :deal_categories, :order => "#{DealCategory.table_name}.name", :dependent => :delete_all
+            has_and_belongs_to_many :deal_statuses, :order => "#{DealStatus.table_name}.status_type, #{DealStatus.table_name}.position", :uniq => true
           end
         end
       end

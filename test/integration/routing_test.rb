@@ -54,4 +54,11 @@ class RoutingTest < ActiveRecord::VERSION::MAJOR >= 4 ? Redmine::ApiTest::Base :
     assert_routing({ :path => "/notes/1", :method => :put }, { :controller => "notes", :action => "update", :id => '1'})
     assert_routing({ :path => "/notes", :method => :post }, { :controller => "notes", :action => "create"})
   end
+  test "deals" do
+    # REST actions
+    assert_routing({ :path => "/deals", :method => :get }, { :controller => "deals", :action => "index" })
+    assert_routing({ :path => "/deals/1", :method => :get }, { :controller => "deals", :action => "show", :id => '1'})
+    assert_routing({ :path => "/deals/1/edit", :method => :get }, { :controller => "deals", :action => "edit", :id => '1'})
+    assert_routing({ :path => "/projects/23/deals", :method => :get }, { :controller => "deals", :action => "index", :project_id => '23'})
+  end
 end

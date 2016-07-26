@@ -38,6 +38,16 @@ module RedmineContacts
             link_to(value, contact_path(value))
           elsif column.name == :name && list_object.is_a?(Contact)
             contact_tag(list_object)
+          elsif column.name == :name && list_object.is_a?(Deal)
+            link_to(list_object.name, deal_path(list_object))
+          elsif column.name == :price && list_object.is_a?(Deal)
+            list_object.price_to_s
+          elsif column.name == :expected_revenue && list_object.is_a?(Deal)
+            list_object.expected_revenue_to_s
+          elsif column.name == :probability && !value.blank? && list_object.is_a?(Deal)
+            "#{value.to_i}%"
+          elsif value.is_a?(Deal)
+            deal_tag(value, :no_contact => true, :plain => true)
           elsif value.is_a?(Contact)
             contact_tag(value)
           elsif column.name == :contacts

@@ -96,6 +96,33 @@ class CommonViewsTest < ActiveRecord::VERSION::MAJOR >= 4 ? Redmine::ApiTest::Ba
     get "/contacts_tags/1/edit"
     assert_response :success
   end
+  test "View deal status edit" do
+    log_user("admin", "admin")
+    get "/deal_statuses/1/edit"
+    assert_response :success
+  end
+
+  test "View My page with contacts and deals blocks" do
+    log_user("rhill", "foo")
+    user = User.where(:login => "rhill").first
+    Contact.all.each{|c| c.assigned_to = user; c.save}
+    preferences = user.pref
+    preferences[:my_page_layout] = {'top' => ['my_contacts', 'my_deals']}
+    preferences.save!
+
+    get "/my/page"
+    assert_response :success
+    assert_select "span.contact", "Domoway"
+  end
+
+  def test_new_custom_field
+    log_user("admin", "admin")
+    get "/custom_fields/new", :type => "ContactCustomField"
+    assert_response :success
+
+    get "/custom_fields/new", :type => "DealCustomField"
+    assert_response :success
+  end
 
   test "Global search with contacts" do
     log_user("admin", "admin")

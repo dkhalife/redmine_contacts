@@ -42,6 +42,10 @@ module RedmineContacts
             :action => :manage_contacts,
             :partial => 'projects/contacts_settings',
             :label => :label_contact_plural }) if User.current.allowed_to?(:manage_contacts, @project)
+          tabs.push({ :name => 'deals',
+            :action => :manage_deals,
+            :partial => 'projects/deals_settings',
+            :label => :label_deal_plural }) if User.current.allowed_to?(:manage_deals, @project)
           tabs
 
         end

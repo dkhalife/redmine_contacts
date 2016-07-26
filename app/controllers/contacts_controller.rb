@@ -93,6 +93,9 @@ class ContactsController < ApplicationController
         end
         format.api
         format.atom { render_feed(@contacts, :title => "#{@project || Setting.app_title}: #{l(:label_contact_plural)}") }
+        format.csv { send_data(contacts_to_csv(@contacts), :type => 'text/csv; header=present', :filename => 'contacts.csv') }
+        format.xls { send_data(contacts_to_xls(@contacts), :filename => "contacts.xls", :type => 'application/vnd.ms-excel', :disposition => 'attachment') }
+        format.vcf { send_data(contacts_to_vcard(@contacts), :filename => "contacts.vcf", :type => 'text/x-vcard', :disposition => 'attachment') }
       end
     else
       respond_to do |format|
@@ -184,12 +187,15 @@ class ContactsController < ApplicationController
     end
 
     contacts = find_contacts(false)
+    deals = find_deals
 
     joins = " "
     joins << " LEFT OUTER JOIN #{Contact.table_name} ON #{Note.table_name}.source_id = #{Contact.table_name}.id AND #{Note.table_name}.source_type = 'Contact' "
+    joins << " LEFT OUTER JOIN #{Deal.table_name} ON #{Note.table_name}.source_id = #{Deal.table_name}.id AND #{Note.table_name}.source_type = 'Deal' "
     cond = "(1 = 1) "
     cond << "and (#{Contact.table_name}.id in (#{contacts.any? ? contacts.map(&:id).join(', ') : 'NULL'})"
-    cond << " )"
+    
+    cond << " or #{Deal.table_name}.id in (#{deals.any? ? deals.map(&:id).join(', ') : 'NULL'}))"
     cond << " and (LOWER(#{Note.table_name}.content) LIKE '%#{params[:search_note].downcase}%')" if params[:search_note] and request.xhr?
     cond << " and (#{Note.table_name}.author_id = #{params[:note_author_id]})" if !params[:note_author_id].blank?
     cond << " and (#{Note.table_name}.type_id = #{params[:type_id]})" if !params[:type_id].blank?
@@ -212,6 +218,7 @@ class ContactsController < ApplicationController
     @contacts = Contact.visible.where(:id => params[:selected_contacts])
     @contact = @contacts.first if (@contacts.size == 1)
     @can = {:edit => (@contact && @contact.editable?) || (@contacts && @contacts.collect{|c| c.editable?}.inject{|memo,d| memo && d}),
+            :create_deal => (@project && User.current.allowed_to?(:add_deals, @project)),
             :create => (@project && User.current.allowed_to?(:add_contacts, @project)),
             :delete => @contacts.collect{|c| c.deletable?}.inject{|memo,d| memo && d},
             :send_mails => @contacts.collect{|c| c.send_mail_allowed? && !c.primary_email.blank?}.inject{|memo,d| memo && d}
@@ -225,6 +232,97 @@ class ContactsController < ApplicationController
     raise ActiveRecord::RecordNotFound if @contacts.empty?
     @contacts.each(&:destroy)
     redirect_back_or_default({:action => "index", :project_id => params[:project_id]})
+  end
+  def bulk_edit
+    @contacts = Contact.editable.where(:id => params[:ids])
+    @projects = @contacts.collect{|p| p.projects.to_a.compact}.compact.flatten.uniq
+    raise ActiveRecord::RecordNotFound if @contacts.empty?
+    @custom_fields = ContactCustomField.order(:name)
+    @tag_list = RedmineCrm::TagList.from(@contacts.map(&:tag_list).inject{|memo,t| memo | t})
+    @project = @projects.first
+    @assignables = @projects.map(&:assignable_users).inject{|memo,a| memo & a}
+    @add_projects = Project.allowed_to(:edit_contacts).order(:lft)
+  end
+
+  def bulk_update
+    @contacts = Contact.editable.where(:id => params[:ids])
+    raise ActiveRecord::RecordNotFound if @contacts.empty?
+    unsaved_contact_ids = []
+    @contacts.each do |contact|
+      contact.reload
+      params[:contact][:tag_list] = (contact.tag_list + RedmineCrm::TagList.from(params[:add_tag_list]) - RedmineCrm::TagList.from(params[:delete_tag_list])).uniq
+
+      add_project_ids = (!params[:add_projects_list].to_s.blank? && params[:add_projects_list].is_a?(Array))  ? Project.allowed_to(:edit_contacts).where(:id => params[:add_projects_list].collect{|p| p.to_i}).map(&:id) : []
+      delete_project_ids = (!params[:delete_projects_list].to_s.blank? && params[:delete_projects_list].is_a?(Array)) ? Project.allowed_to(:edit_contacts).where(:id => params[:delete_projects_list].collect{|p| p.to_i}).map(&:id) : []
+      project_ids = contact.project_ids + add_project_ids - delete_project_ids
+      params[:contact][:project_ids] = project_ids if project_ids.any?
+
+      contact.tags.clear
+      unless contact.update_attributes(parse_params_for_bulk_contact_attributes(params))
+        # Keep unsaved issue ids to display them in flash error
+        unsaved_contact_ids << contact.id
+      end
+      if !params[:note][:content].blank?
+        note = ContactNote.new(params[:note])
+        note.author = User.current
+        contact.notes << note
+      end
+
+    end
+    set_flash_from_bulk_contact_save(@contacts, unsaved_contact_ids)
+    redirect_back_or_default({:controller => 'contacts', :action => 'index', :project_id => @project})
+  end
+
+  def edit_mails
+    @contacts = Contact.visible.where(:id => params[:ids]).reject{|c| c.email.blank?}
+    raise ActiveRecord::RecordNotFound if @contacts.empty?
+    if !@contacts.collect{|c| c.send_mail_allowed?}.inject{|memo,d| memo && d}
+      deny_access
+      return
+    end
+  end
+
+  def send_mails
+    contacts = Contact.visible.where(:id => params[:ids])
+    raise ActiveRecord::RecordNotFound if contacts.empty?
+    if !contacts.collect{|c| c.send_mail_allowed?}.inject{|memo,d| memo && d}
+      deny_access
+      return
+    end
+    raise_delivery_errors = ActionMailer::Base.raise_delivery_errors
+    # Force ActionMailer to raise delivery errors so we can catch it
+    ActionMailer::Base.raise_delivery_errors = true
+    delivered_contacts = []
+    error_contacts = []
+    contacts.each do |contact|
+      begin
+        params[:message] = mail_macro(contact, params[:"message-content"])
+        ContactsMailer.bulk_mail(contact, params).deliver
+        delivered_contacts << contact
+
+        note = ContactNote.new
+        note.subject = params[:subject]
+        note.content = params[:message]
+        note.author = User.current
+        note.type_id = Note.note_types[:email]
+        contact.notes << note
+        Attachment.attach_files(note, params[:attachments])
+        render_attachment_warning_if_needed(note)
+
+      rescue Exception => e
+        error_contacts << [contact, e.message]
+      end
+      flash[:notice] = l(:notice_email_sent, delivered_contacts.map{|c| "#{c.name} <span class='icon icon-email'>#{c.emails.first}</span>"}.join(', ')).chomp[0,500] if delivered_contacts.any?
+      flash[:error] = l(:notice_email_error, error_contacts.map{|e| "#{e[0].name}: #{e[1]}"}.join(', ')).chomp[0,500] if error_contacts.any?
+    end
+
+    ActionMailer::Base.raise_delivery_errors = raise_delivery_errors
+    redirect_back_or_default({:controller => 'contacts', :action => 'index', :project_id => @project})
+  end
+
+  def preview_email
+    @text = mail_macro(Contact.visible.where(:id  => params[:ids][0]).first, params[:"message-content"])
+    render :partial => 'common/preview'
   end
 
   def load_tab
@@ -269,6 +367,31 @@ private
     @project ||= @contact.project
   rescue ActiveRecord::RecordNotFound
     render_404
+  end
+  def find_deals
+    scope = Deal.where({})
+    scope = scope.where("#{Deal.table_name}.project_id = ?", @project.id) if @project
+    scope = scope.where("#{Deal.table_name}.name LIKE ? ", "%" + params[:search] + "%") if params[:search]
+    scope = scope.where("1=0") if params[:tag]
+    @deals = scope.visible
+  end
+
+  def parse_params_for_bulk_contact_attributes(params)
+    attributes = (params[:contact] || {}).reject {|k,v| v.blank?}
+    attributes.each { |k,v| attributes[k] = v.reject {|k,v| v.blank?} if v.is_a?(Hash)}
+    attributes.keys.each {|k| attributes[k] = '' if attributes[k] == 'none'}
+    if custom = attributes[:custom_field_values]
+      custom.reject! {|k,v| v.blank?}
+      custom.keys.each do |k|
+        if custom[k].is_a?(Array)
+          custom[k] << '' if custom[k].delete('__none__')
+        else
+          custom[k] = '' if custom[k] == '__none__'
+        end
+      end
+      attributes[:custom_field_values] = custom
+    end
+    attributes
   end
 
   def find_contacts(pages=true)

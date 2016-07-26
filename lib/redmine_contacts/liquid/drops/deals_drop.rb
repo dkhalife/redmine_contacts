@@ -48,4 +48,30 @@ end
 
 
 class DealDrop < Liquid::Drop
+
+  delegate :id, :name, :created_on, :due_date, :price, :price_type, :currency, :background, :probability, :to => :@deal
+
+  def initialize(deal)
+    @deal = deal
+  end
+
+  def notes
+    @deal.notes.map{|n| NoteDrop.new(n) }
+  end
+
+  def category
+    @deal.category.name if @deal.category
+  end
+
+  def contact
+    ContactDrop.new @deal.contact if @deal.contact
+  end
+
+  def status
+    @deal.status.name if @deal.status
+  end
+
+  def custom_field_values
+    @deal.custom_field_values
+  end
 end

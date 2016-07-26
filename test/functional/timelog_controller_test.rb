@@ -59,5 +59,13 @@ class TimelogControllerTest < ActionController::TestCase
   def setup
     RedmineContacts::TestCase.prepare
   end
+  def test_get_report_with_deal
+    @request.session[:user_id] = 1
+    get :report, :columns => "month", :criteria => ["deal", "deal_contact"], :project_id => "ecookbook"
+    assert_response :success
+    assert_select "table#time-report td", /Domoway/
+    assert_select "table#time-report td", /First deal with contacts/
+    assert_select "table#time-report td", /Second deal with contacts/
+  end
 
 end

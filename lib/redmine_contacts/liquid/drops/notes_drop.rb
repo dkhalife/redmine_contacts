@@ -54,5 +54,8 @@ class NoteDrop < Liquid::Drop
   def initialize(note)
     @note = note
   end
+  def custom_field_values
+    @note.custom_field_values
+  end
 
 end

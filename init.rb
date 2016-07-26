@@ -22,7 +22,7 @@ requires_redmine_crm :version_or_higher => '0.0.21' rescue raise "\n\033[31mRedm
 require 'redmine'
 
 CONTACTS_VERSION_NUMBER = '4.0.4'
-CONTACTS_VERSION_TYPE = "Light version"
+CONTACTS_VERSION_TYPE = "PRO version"
 
 if ActiveRecord::VERSION::MAJOR >= 4
   require 'csv'
@@ -46,6 +46,30 @@ Redmine::Plugin.register :redmine_contacts do
     :contact_list_default_columns => ["first_name", "last_name"],
     :max_thumbnail_file_size => 300
   }, :partial => 'settings/contacts/contacts'
+  project_module :deals do
+    permission :delete_deals, :deals => [:destroy, :bulk_destroy]
+    permission :view_deals, {
+      :deals => [:index, :show, :context_menu],
+      :notes => [:show],
+      :deal_categories => [:index]
+    }
+    permission :edit_deals, {
+      :deals => [:edit, :update, :add_attachment, :bulk_update, :bulk_edit, :update_form],
+      :deal_contacts => [:add, :delete],
+      :notes =>  [:create, :destroy, :update]
+    }
+    permission :add_deals, {
+      :deals => [:new, :create, :update_form]
+    }
+
+    permission :manage_deals, {
+      :deal_categories => [:new, :edit, :destroy, :update, :create],
+      :deal_statuses => [:assing_to_project], :require => :member
+    }
+
+    permission :delete_deal_watchers, { :watchers => :destroy }
+    permission :import_deals, {:deal_imports => [:new, :create, :show, :settings, :mapping, :run]}
+  end
 
   project_module :contacts do
     permission :view_contacts, {
@@ -84,6 +108,13 @@ Redmine::Plugin.register :redmine_contacts do
       :projects => :settings,
       :contacts_settings => :save,
     }
+    permission :import_contacts, {:contact_imports => [:new, :create, :show, :settings, :mapping, :run]}
+    permission :export_contacts, {}
+    permission :send_contacts_mail, :contacts => [:edit_mails, :send_mails, :preview_email]
+    permission :manage_public_contacts_queries, {}, :require => :member
+    permission :save_contacts_queries, {}, :require => :loggedin
+    permission :manage_public_deals_queries, {}, :require => :member
+    permission :save_deals_queries, {}, :require => :loggedin
 
   end
 
@@ -99,13 +130,29 @@ Redmine::Plugin.register :redmine_contacts do
                           :caption => :label_contact_plural,
                           :if => Proc.new{ User.current.allowed_to?({:controller => 'contacts', :action => 'index'},
                                           nil, {:global => true})  && ContactsSetting.contacts_show_in_app_menu? }
+  menu :top_menu, :deals,
+                          {:controller => 'deals', :action => 'index', :project_id => nil},
+                          :caption => :label_deal_plural,
+                          :if => Proc.new{ User.current.allowed_to?({:controller => 'deals', :action => 'index'},
+                                          nil, {:global => true}) && ContactsSetting.deals_show_in_top_menu? }
+  menu :application_menu, :deals,
+                          {:controller => 'deals', :action => 'index'},
+                          :caption => :label_deal_plural,
+                          :if => Proc.new{ User.current.allowed_to?({:controller => 'deals', :action => 'index'},
+                                          nil, {:global => true}) && ContactsSetting.deals_show_in_app_menu? }
+
+  menu :project_menu, :deals, {:controller => 'deals', :action => 'index' },
+                              :caption => :label_deal_plural,
+                              :param => :project_id
 
   menu :admin_menu, :contacts, {:controller => 'settings', :action => 'plugin', :id => "redmine_contacts"}, :caption => :contacts_title
 
   activity_provider :contacts, :default => false, :class_name => ['ContactNote', 'Contact']
+  activity_provider :deals, :default => false, :class_name => ['DealNote', 'Deal']
 
   Redmine::Search.map do |search|
     search.register :contacts
+    search.register :deals
   end
 
 end

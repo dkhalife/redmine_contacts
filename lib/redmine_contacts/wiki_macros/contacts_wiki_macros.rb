@@ -73,6 +73,13 @@ module RedmineContacts
         note = Note.find_by_id(args.first)
         textilizable(note, :content).html_safe if note && note.source.visible?
       end
+      desc "Deal"
+      macro :deal do |obj, args|
+        args, options = extract_macro_options(args, :parent)
+        raise 'No or bad arguments.' if args.size != 1
+        deal = Deal.visible.find(args.first)
+        deal_tag(deal)
+      end
 
     end
 

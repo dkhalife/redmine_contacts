@@ -25,6 +25,7 @@ module ContactsHelper
     contact_tabs = []
     contact_tabs << {:name => 'notes', :partial => 'contacts/notes', :label => l(:label_crm_note_plural)} if contact.visible?
     contact_tabs << {:name => 'contacts', :partial => 'company_contacts', :label => l(:label_contact_plural) + (contact.company_contacts.visible.count > 0 ? " (#{contact.company_contacts.count})" : "")} if contact.is_company?
+    contact_tabs << {:name => 'deals', :partial => 'deals/related_deals', :label => l(:label_deal_plural) + (contact.all_visible_deals.size > 0 ? " (#{contact.all_visible_deals.size})" : "") } if User.current.allowed_to?(:add_deals, @project)
     contact_tabs
   end
 
@@ -32,6 +33,8 @@ module ContactsHelper
     ret = [
       {:name => 'general', :partial => 'settings/contacts/contacts_general', :label => :label_general},
       {:name => 'money', :partial => 'settings/contacts/money', :label => :label_crm_money_settings},
+      {:name => 'tags', :partial => 'settings/contacts/contacts_tags', :label => :label_crm_tags_plural},
+      {:name => 'deal_statuses', :partial => 'settings/contacts/contacts_deal_statuses', :label => :label_crm_deal_status_plural},
     ]
     ret.push({:name => 'hidden', :partial => 'settings/contacts/contacts_hidden', :label => :label_crm_contacts_hidden}) if params[:hidden]
     ret
@@ -45,6 +48,8 @@ module ContactsHelper
 
   def contact_list_styles_for_select
     list_styles = [[l(:label_crm_list_excerpt), "list_excerpt"]]
+    list_styles += [[l(:label_crm_list_list), "list"],
+                    [l(:label_crm_list_cards), "list_cards"]]
   end
 
   def contacts_list_style
@@ -119,6 +124,161 @@ module ContactsHelper
 
     card.to_s
 
+  end
+  def contacts_to_vcard(contacts)
+    return "" unless User.current.allowed_to?(:export_contacts, @project, :global => true)
+    contacts.map{|c| contact_to_vcard(c) }.join("\r\n")
+  end
+
+  def contacts_to_csv(contacts)
+    return "" unless User.current.allowed_to?(:export_contacts, @project, :global => true)
+    decimal_separator = l(:general_csv_decimal_separator)
+    encoding = 'utf-8'
+    export = FCSV.generate(:col_sep => l(:general_csv_separator)) do |csv|
+      # csv header fields
+      headers = [ "#",
+                  l(:field_is_company, :locale => :en),
+                  l(:field_contact_first_name, :locale => :en),
+                  l(:field_contact_middle_name, :locale => :en),
+                  l(:field_contact_last_name, :locale => :en),
+                  l(:field_contact_job_title, :locale => :en),
+                  l(:field_contact_company, :locale => :en),
+                  l(:field_contact_phone, :locale => :en),
+                  l(:field_contact_email, :locale => :en),
+                  l(:label_crm_address, :locale => :en),
+                  l(:label_crm_city, :locale => :en),
+                  l(:label_crm_postcode, :locale => :en),
+                  l(:label_crm_region, :locale => :en),
+                  l(:label_crm_country_code, :locale => :en),
+                  l(:field_contact_skype, :locale => :en),
+                  l(:field_contact_website, :locale => :en),
+                  l(:field_birthday, :locale => :en),
+                  l(:field_contact_tag_names, :locale => :en),
+                  l(:label_crm_assigned_to, :locale => :en),
+                  l(:field_contact_background, :locale => :en),
+                  l(:field_created_on, :locale => :en),
+                  l(:field_updated_on, :locale => :en)
+                  ]
+      # Export project custom fields if project is given
+      # otherwise export custom fields marked as "For all projects"
+      custom_fields = ContactCustomField.order(:name)
+      custom_fields.each {|f| headers << f.name}
+      # Description in the last column
+      csv << headers.collect {|c| Redmine::CodesetUtil.from_utf8(c.to_s, encoding) }
+      # csv lines
+      contacts.each do |contact|
+        fields = [contact.id,
+                  contact.is_company ? 1 : 0,
+                  contact.first_name,
+                  contact.middle_name,
+                  contact.last_name,
+                  contact.job_title,
+                  contact.company,
+                  contact.phone,
+                  contact.email,
+                  contact.address.to_s.gsub("\r\n"," ").gsub("\n", ' '),
+                  contact.city,
+                  contact.postcode,
+                  contact.region,
+                  contact.address.try(:country_code),
+                  contact.skype_name,
+                  contact.website,
+                  contact.birthday,
+                  contact.tag_list.to_s,
+                  contact.assigned_to ? contact.assigned_to.name : "",
+                  contact.background.to_s.gsub("\r\n"," ").gsub("\n", ' '),
+                  contact.created_on,
+                  contact.updated_on
+                  ]
+        contact.custom_field_values.sort_by{|v| v.custom_field.name}.each {|custom_value| fields << RedmineContacts::CSVUtils.csv_custom_value(custom_value) }
+        csv << fields.collect {|c| Redmine::CodesetUtil.from_utf8(c.to_s, encoding) }
+      end
+    end
+    export
+  end
+
+  def contacts_to_xls(contacts)
+    return "" unless User.current.allowed_to?(:export_contacts, @project, :global => true)
+    require 'spreadsheet'
+
+    Spreadsheet.client_encoding = 'UTF-8'
+    book = Spreadsheet::Workbook.new
+    sheet = book.create_worksheet
+    headers = [ "#",
+            l(:field_is_company),
+            l(:field_contact_first_name),
+            l(:field_contact_middle_name),
+            l(:field_contact_last_name),
+            l(:field_contact_job_title),
+            l(:field_contact_company),
+            l(:field_contact_phone),
+            l(:field_contact_email),
+            l(:label_crm_address),
+            l(:label_crm_city),
+            l(:label_crm_postcode),
+            l(:label_crm_region),
+            l(:label_crm_country),
+            l(:field_contact_skype),
+            l(:field_contact_website),
+            l(:field_birthday),
+            l(:field_contact_tag_names),
+            l(:field_contact_background),
+            l(:field_created_on),
+            l(:field_updated_on)
+            ]
+    custom_fields = ContactCustomField.order(:name)
+    custom_fields.each {|f| headers << f.name}
+    idx = 0
+    row = sheet.row(idx)
+    row.replace headers
+
+    contacts.each do |contact|
+      idx += 1
+      row = sheet.row(idx)
+      fields = [contact.id,
+                  contact.is_company ? 1 : 0,
+                  contact.first_name,
+                  contact.middle_name,
+                  contact.last_name,
+                  contact.job_title,
+                  contact.company,
+                  contact.phone,
+                  contact.email,
+                  contact.address.to_s.gsub("\r\n"," ").gsub("\n", ' '),
+                  contact.city,
+                  contact.postcode,
+                  contact.region,
+                  contact.country,
+                  contact.skype_name,
+                  contact.website,
+                  format_date(contact.birthday),
+                  contact.tag_list.to_s,
+                  contact.background.to_s.gsub("\r\n"," ").gsub("\n", ' '),
+                  format_date(contact.created_on),
+                  format_date(contact.updated_on)
+                  ]
+      contact.custom_field_values.sort_by{|v| v.custom_field.name.downcase}.each {|custom_value| fields << RedmineContacts::CSVUtils.csv_custom_value(custom_value) }
+      row.replace fields
+    end
+
+    xls_stream = StringIO.new('')
+    book.write(xls_stream)
+
+    return xls_stream.string
+  end
+
+  def mail_macro(contact, message)
+    message = message.gsub(/%%NAME%%/, contact.first_name)
+    message = message.gsub(/%%FULL_NAME%%/, contact.name)
+    message = message.gsub(/%%COMPANY%%/, contact.company) if contact.company
+    message = message.gsub(/%%LAST_NAME%%/, contact.last_name) if contact.last_name
+    message = message.gsub(/%%MIDDLE_NAME%%/, contact.middle_name) if contact.middle_name
+    message = message.gsub(/%%DATE%%/, format_date(Date.today.to_s))
+
+    contact.custom_field_values.each do |value|
+      message = message.gsub(/%%#{value.custom_field.name}%%/, value.value.to_s)
+    end
+    message
   end
 
   def set_flash_from_bulk_contact_save(contacts, unsaved_contact_ids)

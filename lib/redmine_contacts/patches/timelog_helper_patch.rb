@@ -34,6 +34,8 @@ module RedmineContacts
         def format_criteria_value_with_contacts(criteria_options, value)
           if !value.blank? && criteria_options[:kclass] == Contact && obj = Contact.find_by_id(value.to_i)
             obj.visible? ? obj.name : "#{l(:label_contact)} - ##{obj.id}"
+          elsif !value.blank? && criteria_options[:kclass] == Deal && obj = Deal.find_by_id(value.to_i)
+            obj.visible? ? "#{obj.full_name} (#{obj.info})" : "#{l(:label_deal)} - ##{obj.id}"
           else
             format_criteria_value_without_contacts(criteria_options, value)
           end

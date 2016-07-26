@@ -148,6 +148,13 @@ class ContactsSetting < ActiveRecord::Base
       "%street1%\n%street2%\n%city%, %postcode%\n%region%\n%country%"
     end
   end
+  def self.deals_show_in_top_menu?
+    !!Setting.plugin_redmine_contacts["deals_show_in_top_menu"]
+  end
+
+  def self.deals_show_in_app_menu?
+    !!Setting.plugin_redmine_contacts["deals_show_in_app_menu"]
+  end
 
   private
 

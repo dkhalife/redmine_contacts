@@ -30,6 +30,22 @@ module RedmineContacts
       end
 
       module InstanceMethods
+        def deals
+          @deals = []
+          q = (params[:q] || params[:term]).to_s.strip
+          if q.present?
+            scope = Deal.joins(:project).where({})
+            scope = scope.limit(params[:limit] || 10)
+            scope = scope.by_project(@project) if @project
+            if q.match(/\A#?(\d+)\z/)
+              @deals << scope.visible.find_by_id($1.to_i)
+            end
+            q.split(' ').collect{ |search_string| scope = scope.live_search(search_string) }
+            @deals += scope.visible.order("#{Deal.table_name}.name")
+            @deals.compact!
+          end
+          render :layout => false, :partial => 'deals'
+        end
 
         def contact_tags
           @name = params[:q].to_s

@@ -33,6 +33,12 @@ module RedmineContacts
           else
             has_and_belongs_to_many :contacts, :uniq => true
           end
+          has_one :deals_issue
+          has_one :deal, :through => :deals_issue
+          accepts_nested_attributes_for :deals_issue, :reject_if => :reject_deal, :allow_destroy => true
+
+          safe_attributes 'deals_issue_attributes',
+            :if => lambda {|issue, user| user.allowed_to?(:edit_deals, issue.project)}
         end
       end
 

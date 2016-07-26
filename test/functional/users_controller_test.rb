@@ -58,5 +58,12 @@ class UsersControllerTest < ActionController::TestCase
   def setup
     RedmineContacts::TestCase.prepare
   end
+  def test_get_new_from_contact
+    @request.session[:user_id] = 1
+    get :new_from_contact, :contact_id => 1, :id => "current"
+    assert_response :success
+    assert_template 'new'
+    assert_select 'input#user_firstname[value=?]', "Ivan"
+  end
 
 end

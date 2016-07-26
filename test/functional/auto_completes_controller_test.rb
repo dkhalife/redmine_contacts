@@ -114,5 +114,16 @@ class AutoCompletesControllerTest < ActionController::TestCase
     tag = json.last
     assert_match 'main', tag
   end
+  def test_deals_should_return_json
+    get :deals, :q => 'redmine'
+    assert_response :success
+    json = ActiveSupport::JSON.decode(response.body)
+    assert_kind_of Array, json
+    deal = json.last
+    assert_kind_of Hash, deal
+    assert_equal 3, deal['id']
+    assert_equal 3, deal['value']
+    assert_match 'Delevelop redmine plugin', deal['label']
+  end
 
 end

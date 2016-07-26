@@ -43,6 +43,7 @@
 
 <% other_formats_links do |f| %>
 	<%= f.link_to 'Atom', :url => params.merge(:key => User.current.rss_key) %>
+    <%= f.link_to 'CSV', :url => params %>
 <% end %>
 
 <% content_for :sidebar do %>

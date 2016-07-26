@@ -99,5 +99,14 @@ class WikiControllerTest < ActionController::TestCase
     assert_template 'show'
     assert_select 'div.wiki p', /Note 1 content with wiki syntax/
   end
+  def test_show_with_deal_macro
+    @request.session[:user_id] = 1
+    @page.content.text = "{{deal(1)}}"
+    @page.content.save!
+    get :show, :project_id => 1, :id => @page_name
+    assert_response :success
+    assert_template 'show'
+    assert_select 'div.wiki p', /Ivan Ivanov: First deal with contacts/
+  end
 
 end

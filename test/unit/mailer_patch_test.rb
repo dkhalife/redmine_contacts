@@ -87,6 +87,25 @@ class MailerPatchTest < ActiveSupport::TestCase
     assert Mailer.crm_contact_add(contact).deliver
     assert_match "Contact #1: Ivan Ivanov", last_email.text_part.to_s
   end
+  def test_crm_note_add_to_deal
+    note = Note.find(5)
+    assert Mailer.crm_note_add(note).deliver
+    assert_match "Note 5", last_email.text_part.to_s
+  end
+
+  def test_crm_deal_add
+    deal = Deal.find(1)
+    assert Mailer.crm_deal_add(deal).deliver
+    assert_match "Deal #1", last_email.text_part.to_s
+  end
+
+  def test_crm_deal_updated
+    deal_process = DealProcess.last
+    deal_process.author = User.find(2)
+    deal_process.save
+    assert Mailer.crm_deal_updated(deal_process).deliver
+    assert_match "John Smith", last_email.text_part.to_s
+  end
 
   private
 

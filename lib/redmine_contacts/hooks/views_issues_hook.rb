@@ -21,6 +21,8 @@ module RedmineContacts
   module Hooks
     class ViewsIssuesHook < Redmine::Hook::ViewListener
       render_on :view_issues_sidebar_planning_bottom, :partial => "contacts_issues/contacts", :locals => {:contact_issue => @issue}
+      render_on :view_issues_form_details_bottom, :partial => 'deals_issues/form'
+      render_on :view_issues_show_details_bottom, :partial => 'deals_issues/show'
     end
   end
 end
